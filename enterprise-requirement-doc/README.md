@@ -9,22 +9,23 @@
 - **三分法标注**：明确区分事实/推断/待确认，防止 AI 幻觉
 - **需求变更分类**：自动识别新增点/优化点/改造点
 - **自评机制**：生成 AI 自评报告，确保文档质量
-- **DOCX 渲染**：自动将 Markdown 转换为 Word 文档
+- **DOCX 生成**：使用 python-docx API 结构化构建专业 Word 文档（带封面、样式、配色）
 
 ## 📁 目录结构
 
 ```
 enterprise-requirement-doc/
 ├── SKILL.md                      # 技能主定义
+├── docx-generation-guide.md      # DOCX 生成指南（样式/模板/配色）
 ├── material-analysis-guide.md    # 原材料解析指南
 ├── delta-template.md             # 中间稿模板（需求新增优化改造点）
 ├── document-template.md          # 正式文档模板
 ├── writing-guide.md              # 写作规范与转化规则
 ├── self-review-checklist.md      # AI 自评清单
 ├── examples.md                   # 用法示例
+├── 使用文档.md                   # 面向用户的完整使用指南
 └── scripts/
-    ├── extract_docx.py           # DOCX 提取脚本
-    └── render_requirement_doc.py # DOCX 渲染脚本
+    └── extract_docx.py           # DOCX 提取脚本
 ```
 
 ## 🚀 使用方法
@@ -89,10 +90,8 @@ Phase 6: Self Review          → AI 自评并修正
 python scripts/extract_docx.py "原材料.docx" --output "提取结果.md"
 ```
 
-### 渲染 DOCX
-```bash
-python scripts/render_requirement_doc.py "需求文档.md" "输出.docx"
-```
+### 生成 DOCX
+> 已废弃 `render_requirement_doc.py` 脚本（格式简陋）。现在使用 python-docx API 结构化构建 Word 文档，详见 [docx-generation-guide.md](docx-generation-guide.md)。
 
 ## 📄 许可证
 
