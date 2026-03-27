@@ -103,7 +103,6 @@ def blocks_to_markdown(blocks):
         rows = block["rows"]
         if not rows:
             continue
-
         width = max(len(row) for row in rows)
         normalized = [row + [""] * (width - len(row)) for row in rows]
         header = normalized[0]
@@ -112,7 +111,6 @@ def blocks_to_markdown(blocks):
         for row in normalized[1:]:
             lines.append("| " + " | ".join(escape_cell(cell) for cell in row) + " |")
         lines.append("")
-
     return "\n".join(lines).strip() + "\n"
 
 
@@ -129,7 +127,9 @@ def main():
     parser = argparse.ArgumentParser(description="Extract text and tables from a DOCX file.")
     parser.add_argument("input", help="Input .docx path")
     parser.add_argument(
-        "--output", "-o", help="Optional output file path. Defaults to stdout."
+        "--output",
+        "-o",
+        help="Optional output file path. Defaults to stdout."
     )
     parser.add_argument(
         "--format",
@@ -142,10 +142,12 @@ def main():
     input_path = Path(args.input)
     if not input_path.exists():
         raise SystemExit(f"Input file does not exist: {input_path}")
+
     if input_path.suffix.lower() != ".docx":
         raise SystemExit("Only .docx files are supported.")
 
     blocks = parse_document(input_path)
+
     if args.format == "json":
         content = json.dumps(blocks, ensure_ascii=False, indent=2) + "\n"
     else:
