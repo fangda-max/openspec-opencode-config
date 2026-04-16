@@ -1,0 +1,17 @@
+{
+  "llm": {
+    "provider": "minimax",
+    "api_key": "${API_KEY}",
+    "api_url": "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+    "model": "MiniMax-M2.7",
+    "temperature": 0.1,
+    "max_tokens": 4000
+  },
+  "output": {
+    "delta_file": "01-需求新增优化改造点.md",
+    "formal_md_file": "02-系统功能需求说明书.md",
+    "formal_docx_file": "02-系统功能需求说明书.docx",
+    "review_file": "03-AI自评报告.md",
+    "limitations_file": "04-AI局限性声明.md"
+  }
+}

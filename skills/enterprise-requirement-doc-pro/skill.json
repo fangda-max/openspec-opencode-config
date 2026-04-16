@@ -1,0 +1,6 @@
+{
+  "name": "enterprise-requirement-doc-pro",
+  "version": "1.0.0",
+  "description": "生产级企业需求文档生成器，输出中间稿、正式 PRD、DOCX、自评报告和 AI 局限性声明",
+  "entry": "scripts/prd_generator.py"
+}
