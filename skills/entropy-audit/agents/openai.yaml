@@ -1,0 +1,4 @@
+interface:
+  display_name: "Entropy Audit"
+  short_description: "Run Java entropy governance audits"
+  default_prompt: "Use $entropy-audit to run a monthly entropy audit and summarize the report."
