@@ -2478,20 +2478,7 @@ def _hero_score_insights(
     semantic = details_of("semantic")
     behavior = details_of("behavior")
     cognition = details_of("cognition")
-    structure = details_of("structure")
     style = details_of("style")
-    statistics = dict(summary.get("statistics", {})) if isinstance(summary.get("statistics"), dict) else {}
-    total_files = statistics.get("total_files")
-    total_dirs = statistics.get("total_directories") or structure.get("total_directories")
-    java_lines = style.get("java_line_count")
-    rule_count = 0
-    completed_count = 0
-    for _key, item in code_entropy_items:
-        breakdown = item.get("score_breakdown")
-        if isinstance(breakdown, dict):
-            rule_count += int(breakdown.get("rule_count", 0) or 0)
-        if isinstance(item.get("score"), (int, float)):
-            completed_count += 1
 
     term_gap = semantic.get("undefined_terms")
     term_total = semantic.get("term_gap_candidate_count")
@@ -2513,15 +2500,6 @@ def _hero_score_insights(
         </div>'''
         for label, value, note in evidence_cards
     )
-    sample_bits = []
-    if total_files not in (None, "", "N/A"):
-        sample_bits.append(f"{_fmt_number(total_files, 0)} Java 文件")
-    if java_lines not in (None, "", "N/A"):
-        sample_bits.append(f"{_fmt_number(java_lines, 0)} 行")
-    if total_dirs not in (None, "", "N/A"):
-        sample_bits.append(f"{_fmt_number(total_dirs, 0)} 目录")
-    sample_text = " · ".join(sample_bits) if sample_bits else "样本信息缺失"
-    coverage_text = f"{len(ranked)} 类熵 · {rule_count} 条规则 · {completed_count}/{len(ranked)} 类完成计分"
     return f'''<div class="score-insights">
         <div class="score-contribution-panel">
             <div class="score-panel-head">
@@ -2531,10 +2509,49 @@ def _hero_score_insights(
             <div class="score-contribution-list">{contribution_rows}</div>
         </div>
         <div class="score-evidence-grid">{evidence_html}</div>
-        <div class="score-confidence-line">
+    </div>'''
+
+
+def _hero_score_coverage_compact(
+    code_entropy_items: list[tuple[str, dict[str, object]]],
+    summary: dict[str, object],
+    code_entropy: dict[str, object],
+) -> str:
+    structure = code_entropy.get("structure", {}) if isinstance(code_entropy.get("structure"), dict) else {}
+    structure_details = structure.get("details", {}) if isinstance(structure.get("details"), dict) else {}
+    style = code_entropy.get("style", {}) if isinstance(code_entropy.get("style"), dict) else {}
+    style_details = style.get("details", {}) if isinstance(style.get("details"), dict) else {}
+    statistics = dict(summary.get("statistics", {})) if isinstance(summary.get("statistics"), dict) else {}
+    total_files = statistics.get("total_files")
+    total_dirs = statistics.get("total_directories") or structure_details.get("total_directories")
+    java_lines = style_details.get("java_line_count")
+    rule_count = 0
+    completed_count = 0
+    for _key, item in code_entropy_items:
+        breakdown = item.get("score_breakdown")
+        if isinstance(breakdown, dict):
+            rule_count += int(breakdown.get("rule_count", 0) or 0)
+        if isinstance(item.get("score"), (int, float)):
+            completed_count += 1
+    dimension_count = len(code_entropy_items)
+    coverage = 0.0 if dimension_count <= 0 else completed_count / dimension_count
+    return f'''<div class="score-confidence-line score-confidence-line-compact">
+        <div class="score-confidence-head">
             <strong>计分覆盖</strong>
-            <span>{_esc(coverage_text)}</span>
-            <small>{_esc(sample_text)}</small>
+            <span>覆盖率 {_esc(_fmt_percent_from_ratio(coverage, 0))}</span>
+        </div>
+        <div class="score-confidence-counts">
+            <div class="score-confidence-count"><b>{_esc(_fmt_number(dimension_count, 0))}</b><span>类熵</span></div>
+            <div class="score-confidence-count"><b>{_esc(_fmt_number(rule_count, 0))}</b><span>条规则</span></div>
+            <div class="score-confidence-count"><b>{_esc(_fmt_number(completed_count, 0))}/{_esc(_fmt_number(dimension_count, 0))}</b><span>已计分</span></div>
+        </div>
+        <div class="score-confidence-files">
+            <span>扫描范围</span>
+            <div class="score-confidence-file-row">
+                <b>{_esc(_fmt_number(total_files, 0))}<small>Java 文件</small></b>
+                <b>{_esc(_fmt_number(java_lines, 0))}<small>代码行</small></b>
+                <b>{_esc(_fmt_number(total_dirs, 0))}<small>目录</small></b>
+            </div>
         </div>
     </div>'''
 
@@ -3526,6 +3543,7 @@ def render_html_dashboard(snapshot: ScoredSnapshot) -> str:
     entropy_weights = summary.get("entropy_weights") if isinstance(summary.get("entropy_weights"), dict) else {}
     hero_ranking = _hero_risk_ranking(items, entropy_weights)
     hero_score_insights = _hero_score_insights(items, entropy_weights, summary, code_entropy)
+    hero_score_coverage = _hero_score_coverage_compact(items, summary, code_entropy)
     statistics = dict(summary.get("statistics", {})) if isinstance(summary.get("statistics"), dict) else {}
     structure_details = code_entropy.get("structure", {}).get("details", {}) if isinstance(code_entropy.get("structure"), dict) and isinstance(code_entropy.get("structure", {}).get("details"), dict) else {}
     if "total_directories" not in statistics and isinstance(structure_details.get("total_directories"), (int, float)):
@@ -3586,7 +3604,15 @@ def render_html_dashboard(snapshot: ScoredSnapshot) -> str:
             border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.08); backdrop-filter:blur(10px);
             color:rgba(255,255,255,.88); font-size:13px; font-weight:700;
         }
+        .hero-title-row { display:flex; align-items:center; justify-content:space-between; gap:18px; }
         .hero-title { margin:0; font-size:clamp(38px,5.6vw,64px); line-height:.94; letter-spacing:0; }
+        .hero-catalog-link {
+            display:inline-flex; align-items:center; gap:8px; min-height:42px; padding:0 14px; border-radius:14px;
+            border:1px solid rgba(79,209,197,.38); background:rgba(15,118,110,.24); color:#99f6e4;
+            text-decoration:none; font-size:14px; font-weight:900; white-space:nowrap;
+        }
+        .hero-catalog-link::before { content:""; width:10px; height:10px; border-radius:999px; background:#4fd1c5; box-shadow:0 0 0 4px rgba(79,209,197,.14); }
+        .hero-catalog-link:hover { transform:translateY(-1px); border-color:rgba(79,209,197,.62); background:rgba(15,118,110,.34); }
         .hero-summary { max-width:66ch; margin:0; color:rgba(255,255,255,.78); font-size:16px; }
         .hero-story { display:grid; gap:14px; padding:18px 20px; border-radius:var(--radius-md); border:1px solid rgba(255,255,255,.12); background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)); box-shadow:var(--shadow-sm); }
         .hero-story-label { color:rgba(255,255,255,.62); font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
@@ -3631,6 +3657,8 @@ def render_html_dashboard(snapshot: ScoredSnapshot) -> str:
         .risk-rank-score span { margin-left:2px; }
         .hero-actions, .section-actions, .drawer-actions { display:flex; flex-wrap:wrap; gap:10px; }
         .hero-score-card { display:flex; flex-direction:column; gap:18px; align-self:start; height:auto; padding:24px; border:1px solid rgba(255,255,255,.12); border-radius:24px; background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06)); box-shadow:var(--shadow-md); backdrop-filter:blur(14px); }
+        .hero-score-top { display:grid; grid-template-columns:minmax(0,1fr) minmax(190px,240px); gap:18px; align-items:stretch; }
+        .hero-score-primary { min-width:0; display:grid; gap:18px; align-content:start; }
         .score-card-topline { color:rgba(255,255,255,.56); font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
         .score-card-label { color:rgba(255,255,255,.78); font-size:13px; font-weight:700; }
         .hero-score { font-size:clamp(56px,12vw,96px); font-weight:800; line-height:.92; letter-spacing:0; font-variant-numeric:tabular-nums; }
@@ -3667,6 +3695,35 @@ def render_html_dashboard(snapshot: ScoredSnapshot) -> str:
         .score-evidence-card small { color:rgba(255,255,255,.56); font-size:12px; line-height:1.4; font-weight:650; }
         .score-confidence-line span { color:#fff; font-size:13px; font-weight:850; }
         .score-confidence-line small { color:rgba(255,255,255,.58); font-size:12px; line-height:1.45; }
+        .score-confidence-line-compact {
+            position:relative; overflow:hidden; gap:12px; height:100%; min-height:0; padding:14px;
+            border-color:rgba(79,209,197,.16); background:linear-gradient(180deg,rgba(15,26,41,.72),rgba(8,17,29,.28));
+        }
+        .score-confidence-line-compact::before {
+            content:""; position:absolute; inset:0 0 auto; height:3px;
+            background:linear-gradient(90deg,rgba(79,209,197,.90),rgba(104,211,145,.56));
+        }
+        .score-confidence-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:2px; }
+        .score-confidence-head span {
+            display:inline-flex; align-items:center; justify-content:center; min-height:24px; padding:0 9px;
+            border-radius:999px; color:#99f6e4; background:rgba(79,209,197,.12); font-size:11px; line-height:1; font-weight:900;
+            white-space:nowrap;
+        }
+        .score-confidence-counts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+        .score-confidence-count {
+            display:grid; justify-items:center; gap:3px; min-width:0; padding:8px 4px; border-radius:10px;
+            border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.055);
+        }
+        .score-confidence-count b { color:#fff; font-size:20px; line-height:1; font-weight:900; font-variant-numeric:tabular-nums; }
+        .score-confidence-count span { color:rgba(255,255,255,.58); font-size:11px; line-height:1.2; font-weight:800; white-space:nowrap; }
+        .score-confidence-files { display:grid; gap:6px; align-self:end; padding-top:10px; border-top:1px solid rgba(255,255,255,.08); }
+        .score-confidence-files span { color:rgba(255,255,255,.58); font-size:11px; line-height:1; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+        .score-confidence-file-row { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+        .score-confidence-file-row b {
+            display:grid; gap:2px; min-width:0; color:#fff; font-size:12px; line-height:1.2; font-weight:900;
+            font-variant-numeric:tabular-nums;
+        }
+        .score-confidence-file-row b small { color:rgba(255,255,255,.56); font-size:10px; line-height:1.1; font-weight:800; }
         .nav-shell { position:sticky; top:0; z-index:70; padding:14px 0 0; backdrop-filter:blur(18px); }
         .section-nav { display:flex; gap:10px; overflow-x:auto; padding:14px 18px; border:1px solid var(--line); border-radius:999px; background:var(--nav-bg); box-shadow:var(--shadow-sm); scrollbar-width:thin; }
         .nav-link, .action-link { display:inline-flex; align-items:center; justify-content:center; min-height:46px; padding:0 16px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--text); text-decoration:none; white-space:nowrap; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; }
@@ -3703,7 +3760,7 @@ def render_html_dashboard(snapshot: ScoredSnapshot) -> str:
         .entropy-summary-kicker { color:var(--muted); font-size:12px; font-weight:700; }
         .entropy-summary-value { font-size:20px; line-height:1.25; font-weight:800; color:var(--text); }
         .entropy-summary-note { color:var(--muted); font-size:13px; line-height:1.5; }
-        .metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:20px; align-items:stretch; }
+        .metrics-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; align-items:stretch; }
         .metric-card { position:relative; overflow:hidden; display:grid; grid-template-rows:auto auto auto 1fr auto; gap:18px; min-height:100%; background:linear-gradient(180deg,var(--surface),var(--surface-alt)); padding:22px; border-radius:22px; border:1px solid var(--line); box-shadow:var(--shadow-sm); }
         .metric-card::before { content:""; position:absolute; inset:0 0 auto; height:4px; background:linear-gradient(90deg, rgba(15,118,110,.82), rgba(59,130,246,.76)); }
         .metric-card:hover { border-color:var(--line-strong); box-shadow:var(--shadow-md); transform:translateY(-2px); }
@@ -3836,8 +3893,9 @@ def render_html_dashboard(snapshot: ScoredSnapshot) -> str:
         .raw-detail summary { cursor:pointer; color:var(--brand); font-weight:700; }
         pre { margin:10px 0 0; white-space:pre-wrap; word-break:break-word; font-size:12px; color:var(--text); }
         .empty-state { padding:22px; border:1px dashed var(--line); border-radius:18px; color:var(--muted); text-align:center; }
+        @media (max-width:1180px) { .metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
         @media (max-width:960px) { .table-grid, .detail-layout { grid-template-columns:1fr; } }
-        @media (max-width:1100px) { .hero-grid { grid-template-columns:1fr; } }
+        @media (max-width:1100px) { .hero-grid { grid-template-columns:1fr; } .hero-copy { grid-template-rows:auto; } .hero-ranking, .hero-score-card { height:auto; } .risk-rank-list { align-content:start; } }
         @media (max-width:720px) {
             html { scroll-padding-top:76px; }
             .inner { padding:0 16px; }
@@ -3849,6 +3907,9 @@ def render_html_dashboard(snapshot: ScoredSnapshot) -> str:
             .metric-actions { grid-template-columns:1fr; }
             .metric-actions .metric-action-primary { grid-column:auto; }
             .score-evidence-grid { grid-template-columns:1fr; }
+            .hero-title-row { align-items:flex-start; flex-direction:column; }
+            .hero-score-top { grid-template-columns:1fr; }
+            .score-confidence-line-compact { min-height:0; }
             .risk-rank-row { grid-template-columns:30px minmax(0,1fr); }
             .risk-rank-score { grid-column:2; justify-content:flex-start; min-width:0; }
             .section-shell { padding:22px; border-radius:22px; }
@@ -3881,7 +3942,10 @@ def render_html_dashboard(snapshot: ScoredSnapshot) -> str:
                 </div>
                 <div class="hero-head">
                     <div class="hero-eyebrow">Code Entropy</div>
-                    <h1 class="hero-title">代码本体熵仪表盘</h1>
+                    <div class="hero-title-row">
+                        <h1 class="hero-title">代码本体熵仪表盘</h1>
+                        <a class="hero-catalog-link" href="../../rule_catalog.html" target="_blank" rel="noopener">规则目录</a>
+                    </div>
                 </div>
                 <article class="hero-story">
                     <div class="hero-story-label">当前判断</div>
@@ -3891,10 +3955,15 @@ def render_html_dashboard(snapshot: ScoredSnapshot) -> str:
                 {hero_ranking}
             </div>
             <aside class="hero-score-card" style="--total-progress:{total_progress:.0f}%;">
-                <div class="score-card-topline">Primary Signal</div>
-                <div class="score-card-label">代码本体总熵（高=风险更大）</div>
-                <div class="hero-score score-{_entropy_score_class(total_entropy)}">{_esc(_fmt_compact(total_entropy))}<span>/100</span></div>
-                <div class="score-pill score-pill-{_entropy_score_class(total_entropy)}">{_esc(_level_label(total_level))}</div>
+                <div class="hero-score-top">
+                    <div class="hero-score-primary">
+                        <div class="score-card-topline">Primary Signal</div>
+                        <div class="score-card-label">代码本体总熵（高=风险更大）</div>
+                        <div class="hero-score score-{_entropy_score_class(total_entropy)}">{_esc(_fmt_compact(total_entropy))}<span>/100</span></div>
+                        <div class="score-pill score-pill-{_entropy_score_class(total_entropy)}">{_esc(_level_label(total_level))}</div>
+                    </div>
+                    {hero_score_coverage}
+                </div>
                 <p class="hero-score-text">总熵按五类风险分与权重折算；右侧看贡献和证据，左侧按风险排序进入治理。</p>
                 <div class="hero-meter" aria-hidden="true"><span></span></div>
                 {hero_score_insights}

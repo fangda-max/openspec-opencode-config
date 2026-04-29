@@ -334,7 +334,17 @@ class StyleAnalyzer:
         path = Path(value)
         if path.is_absolute():
             return path
-        return (self.project_root / path).resolve()
+        project_candidate = (self.project_root / path).resolve()
+        if project_candidate.exists():
+            return project_candidate
+        package_root = Path(__file__).resolve().parents[3]
+        bundled_parent_candidate = (package_root.parent / path).resolve()
+        if bundled_parent_candidate.exists():
+            return bundled_parent_candidate
+        bundled_package_candidate = (package_root / path).resolve()
+        if bundled_package_candidate.exists():
+            return bundled_package_candidate
+        return project_candidate
 
     def _scan_targets(self) -> list[Path]:
         source_roots: list[Path] = []

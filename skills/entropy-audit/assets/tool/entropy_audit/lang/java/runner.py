@@ -24,6 +24,7 @@ from entropy_audit.lang.java.scoring_v1_schema import build_scoring_v1, refresh_
 
 SUPPORTED_ENTROPIES = ("structure", "semantic", "behavior", "cognition", "style")
 PACKAGE_PATTERN = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
+REVERSE_DNS_ROOTS = {"com", "org", "net", "io", "cn"}
 
 DISCOVERY_EXCLUDE_DIRS = [
     ".git",
@@ -124,9 +125,32 @@ def _iter_java_files(
         if any(part in exclude_dirs for part in parts):
             continue
         files.append(path)
-        if limit is not None and len(files) >= limit:
-            break
-    return files
+    if limit is None or len(files) <= limit:
+        return files
+    return _balanced_sample_paths(project_root, files, limit)
+
+
+def _balanced_sample_paths(project_root: Path, paths: list[Path], limit: int) -> list[Path]:
+    groups: dict[str, list[Path]] = {}
+    for path in sorted(paths, key=lambda item: str(item.relative_to(project_root)).lower()):
+        parts = path.relative_to(project_root).parts
+        group_key = parts[0] if parts else ""
+        groups.setdefault(group_key, []).append(path)
+
+    sampled: list[Path] = []
+    active_keys = sorted(groups)
+    while active_keys and len(sampled) < limit:
+        next_keys: list[str] = []
+        for key in active_keys:
+            bucket = groups[key]
+            if bucket:
+                sampled.append(bucket.pop(0))
+                if len(sampled) >= limit:
+                    break
+            if bucket:
+                next_keys.append(key)
+        active_keys = next_keys
+    return sampled
 
 
 def _common_package_prefix(packages: list[str]) -> str:
@@ -143,10 +167,25 @@ def _common_package_prefix(packages: list[str]) -> str:
     return ".".join(prefix)
 
 
+def _preferred_internal_package_prefix(packages: list[str]) -> str:
+    common_prefix = _common_package_prefix(packages)
+    if not common_prefix:
+        return ""
+    parts = common_prefix.split(".")
+    if len(parts) > 3 and parts[0] in REVERSE_DNS_ROOTS:
+        root = ".".join(parts[:3])
+        covered = sum(1 for package in packages if package == root or package.startswith(f"{root}."))
+        if packages and covered / len(packages) >= 0.8:
+            return root
+    if len(parts) >= 2:
+        return common_prefix
+    return ""
+
+
 def discover_internal_package_prefixes(
     project_root: Path,
     exclude_dirs: list[str] | None = None,
-    limit: int = 200,
+    limit: int | None = None,
     include_extensions: list[str] | None = None,
 ) -> list[str]:
     excluded = set(DISCOVERY_EXCLUDE_DIRS + list(exclude_dirs or []))
@@ -171,10 +210,13 @@ def discover_internal_package_prefixes(
         if root:
             top_roots[root] = top_roots.get(root, 0) + 1
 
-    common_prefix = _common_package_prefix(packages)
-    if common_prefix and len(common_prefix.split(".")) >= 2:
-        return [common_prefix]
-    return [name for name, _count in sorted(top_roots.items(), key=lambda item: item[1], reverse=True)[:5]]
+    preferred_prefix = _preferred_internal_package_prefix(packages)
+    if preferred_prefix:
+        return [preferred_prefix]
+    ranked_roots = sorted(top_roots.items(), key=lambda item: item[1], reverse=True)
+    if ranked_roots and packages and ranked_roots[0][1] / len(packages) >= 0.8:
+        return [ranked_roots[0][0]]
+    return [name for name, _count in ranked_roots[:5]]
 
 
 def _dict_value(value: object) -> dict[str, Any]:

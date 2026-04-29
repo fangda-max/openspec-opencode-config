@@ -21,10 +21,6 @@ def find_project_root(start: Path) -> Path:
 
 
 def cli_invocation(project_root: Path, bundled_tool_root: Path) -> tuple[list[str], dict[str, str]]:
-    if shutil.which("entropy_audit"):
-        return ["entropy_audit"], {}
-    if shutil.which("entropy-audit"):
-        return ["entropy-audit"], {}
     if (project_root / "entropy_audit" / "cli.py").is_file():
         return [sys.executable, "-m", "entropy_audit.cli"], {}
     if (bundled_tool_root / "entropy_audit" / "cli.py").is_file():
@@ -33,6 +29,10 @@ def cli_invocation(project_root: Path, bundled_tool_root: Path) -> tuple[list[st
             + os.pathsep
             + os.environ.get("PYTHONPATH", "")
         }
+    if shutil.which("entropy_audit"):
+        return ["entropy_audit"], {}
+    if shutil.which("entropy-audit"):
+        return ["entropy-audit"], {}
     raise SystemExit(
         "Cannot find entropy_audit CLI. Install the package, run from a repository "
         "containing entropy_audit/, or keep the bundled tool under assets/tool."
